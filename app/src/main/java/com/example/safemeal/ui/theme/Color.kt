@@ -16,3 +16,5 @@ val GreyMain = Color (	0xff58616e)
 
 val DarkGreenMain = Color(	0xff0f3831)
 val WhiteMain = Color( 	0xffffffff)
+
+val LightGreenMain = Color(0xff409c7d)

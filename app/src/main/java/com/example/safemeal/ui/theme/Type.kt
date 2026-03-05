@@ -13,10 +13,16 @@ val Manrope = FontFamily(
     Font(R.font.manrope_regular, FontWeight.Normal),
     Font(R.font.manrope_medium, FontWeight.Medium),
     Font(R.font.manrope_bold, FontWeight.Bold),
-    Font(R.font.manrope_extrabold, FontWeight.ExtraBold)
+    Font(R.font.manrope_extrabold, FontWeight.ExtraBold),
+    Font(R.font.manrope_extralight, FontWeight.ExtraLight)
 )
 
 val Typography = Typography(
+    displayLarge = TextStyle(
+        fontFamily = Manrope,
+        fontWeight = FontWeight.ExtraLight, // Use it here
+        fontSize = 32.sp
+    ),
     // Headlines for Restaurant Names
     titleLarge = TextStyle(
         fontFamily = Manrope,
@@ -41,6 +47,8 @@ val Typography = Typography(
         lineHeight = 16.sp,
         letterSpacing = 0.5.sp
     )
+
+
 )
 
 

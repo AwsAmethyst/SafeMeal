@@ -53,6 +53,12 @@ dependencies {
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.material3)
+    implementation(libs.androidx.compose.runtime.saveable)
+    implementation(libs.androidx.navigation.runtime.ktx)
+    implementation(libs.androidx.compose.runtime)
+    implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -60,5 +66,9 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-    implementation("androidx.navigation:navigation-compose:2.8.0")
-}
+    implementation(libs.androidx.navigation.compose)
+    implementation("com.mapbox.maps:android-ndk27:11.18.2")
+    implementation("com.mapbox.extension:maps-compose-ndk27:11.18.2")
+    implementation("io.appwrite:sdk-for-android:5.1.0")
+
+    }

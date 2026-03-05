@@ -3,18 +3,26 @@ package com.example.safemeal.screens
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicSecureTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.TextObfuscationMode
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -23,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,16 +49,24 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.safemeal.AppwriteManger
 import com.example.safemeal.R
 import com.example.safemeal.ui.theme.DarkGreenMain
 import com.example.safemeal.ui.theme.GreenMain
 import com.example.safemeal.ui.theme.GreyMain
 import com.example.safemeal.ui.theme.SafeMealTheme
 import com.example.safemeal.ui.theme.WhiteMain
+import kotlinx.coroutines.launch
 
 @Composable
-fun LoginPage(onNavigateToSignUp: () -> Unit) {
+fun LoginPage(onNavigateToSignUp: () -> Unit, onLoginSuccess: () -> Unit) {
     var text by remember { mutableStateOf("") }
+    val passState = remember { TextFieldState() }
+    var showPassword by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         //verticalArrangement = Arrangement.Bottom,
@@ -70,7 +87,7 @@ fun LoginPage(onNavigateToSignUp: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                 .background(WhiteMain)
                 .padding(20.dp)
         )
@@ -126,32 +143,59 @@ fun LoginPage(onNavigateToSignUp: () -> Unit) {
                 modifier = Modifier
                     .padding(start = 25.dp, top = 25.dp)
             )
-            TextField(
-                value = text, // Bind the current value
-                onValueChange = { newText -> text = newText }, // Update the state when text changes
-                label = { Text("Enter your password") }, // Optional label/hint
-                placeholder = { Text("") },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    cursorColor = Color.Black,
-                    focusedIndicatorColor = Color.Transparent,    // Hides the line when clicked
-                    unfocusedIndicatorColor = Color.Transparent,  // Hides the line when not clicked
-                    focusedLabelColor = Color.Gray,
-                    unfocusedLabelColor = Color.LightGray
-                ),
+            BasicSecureTextField(
+                state = passState,
+                textObfuscationMode = if(showPassword){
+                    TextObfuscationMode.Visible
+                }else{
+                    TextObfuscationMode.RevealLastTyped
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 20.dp, end = 20.dp)
                     .border(1.dp, GreyMain, shape = RoundedCornerShape(15.dp)),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,      // Shows the '@' key
-                    imeAction = ImeAction.Done
-                ),
-            )
+                decorator = {innerTextField ->
+                    Box(modifier = Modifier.fillMaxWidth()){
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 16.dp, end = 48.dp)
 
+                        ){
+                            if (passState.text.isEmpty()) {
+                                Text(
+                                    fontWeight = FontWeight.ExtraLight,
+                                    text = "Enter your Password",
+                                    color = Color.Gray
+                                )}
+                            innerTextField()
+                        }
+                        Icon(
+                            if(showPassword){
+                                painterResource(R.drawable.visibility)
+                            }else{
+                                painterResource(R.drawable.visibility_off)
+                            },
+                            contentDescription = "Toggle Visibility",
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .requiredSize(48.dp).padding(16.dp)
+                                .clickable { showPassword = !showPassword }
+                        )
+                    }
+                },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Next)
+                )
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage!!,
+                    color = Color.Red,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(start = 25.dp, top = 8.dp)
+                )
+            }
             TextButton(
                 onClick = {}
             ) {
@@ -167,7 +211,25 @@ fun LoginPage(onNavigateToSignUp: () -> Unit) {
 
 
             Button(
-                onClick = {},
+                onClick = {
+                    scope.launch {
+                        isLoading = true
+                        errorMessage = null
+                        try {
+                            // FR13: Create a session with Appwrite
+                            AppwriteManger.AppwriteManager.account.createEmailPasswordSession(
+                                email = text,
+                                password = passState.text.toString()
+                            )
+                            onLoginSuccess() // Navigate to Home
+                        } catch (e: Exception) {
+                            // Handle network errors or invalid credentials
+                            errorMessage = "Invalid email or password"
+                            isLoading = false // Stop loading only if it failed
+                        }
+                    }
+                },
+                enabled = !isLoading && text.isNotEmpty() && passState.text.isNotEmpty(),
                 shape = RoundedCornerShape(15.dp),
                 colors = ButtonColors(
                     containerColor = GreenMain,
@@ -182,31 +244,13 @@ fun LoginPage(onNavigateToSignUp: () -> Unit) {
                 //.background(GreyMain)
 
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    //color = GreenMain
-                ) {
-                    Text(
-                        text = "Sign In",
-                        fontSize = 20.sp,
-                        modifier = Modifier
-                    )
-                }
-
+                    if (isLoading) {
+                        CircularProgressIndicator(color = WhiteMain, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text(text = "Sign In", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = WhiteMain)
+                    }
             }
 
-            /*            Text(
-
-                            text = "Or Sign in with",
-                            textAlign = TextAlign.Center,
-                            color = GreyMain,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(15.dp)
-                        )
-            */
-//Add google sign in here
-// Define your annotated string first
             val annotatedText = buildAnnotatedString {
                 append("Don't have an account ")
 
@@ -253,6 +297,6 @@ fun LoginPage(onNavigateToSignUp: () -> Unit) {
 @Composable
 fun GreetingPreview() {
     SafeMealTheme {
-        LoginPage(onNavigateToSignUp = {})
+        LoginPage(onNavigateToSignUp = {}, onLoginSuccess = {})
     }
 }
