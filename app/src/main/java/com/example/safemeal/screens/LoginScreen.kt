@@ -212,20 +212,31 @@ fun LoginPage(onNavigateToSignUp: () -> Unit, onLoginSuccess: () -> Unit) {
 
             Button(
                 onClick = {
+                    val sanitizedEmail = text.trim().lowercase() // Prevents trailing space errors
+                    if (sanitizedEmail.isEmpty() || passState.text.isEmpty()) {
+                        errorMessage = "Please fill in all fields"
+                        return@Button
+                    }
+
                     scope.launch {
                         isLoading = true
                         errorMessage = null
                         try {
-                            // FR13: Create a session with Appwrite
+                            // Use sanitizedEmail instead of raw email state
                             AppwriteManger.AppwriteManager.account.createEmailPasswordSession(
-                                email = text,
+                                email = sanitizedEmail,
                                 password = passState.text.toString()
                             )
-                            onLoginSuccess() // Navigate to Home
+                            onLoginSuccess()
                         } catch (e: Exception) {
-                            // Handle network errors or invalid credentials
-                            errorMessage = "Invalid email or password"
-                            isLoading = false // Stop loading only if it failed
+                            isLoading = false
+                            // Smart error messaging
+                            errorMessage = when {
+                                e.message?.contains("401") == true -> "Incorrect email or password."
+                                e.message?.contains("409") == true -> "Email already exists."
+                                e.message?.contains("network", true) == true -> "No internet connection."
+                                else -> "An unexpected error occurred."
+                            }
                         }
                     }
                 },

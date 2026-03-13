@@ -62,7 +62,7 @@ fun SignUpPage(onBackToLogin: () -> Unit, onSignUpSuccess: () -> Unit) {
     var email by remember { mutableStateOf("") }
     val passState = remember { TextFieldState() }
     var showPassword by remember { mutableStateOf(false) }
-
+    var errorMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     var isLoading by remember { mutableStateOf(false) }
 
@@ -214,21 +214,30 @@ fun SignUpPage(onBackToLogin: () -> Unit, onSignUpSuccess: () -> Unit) {
                     keyboardType = KeyboardType.Password,
                     imeAction = ImeAction.Next)
             )
-
+            if (errorMessage != null) {
+                Text(
+                    text = errorMessage!!,
+                    color = Color.Red,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 25.dp, vertical = 8.dp)
+                )
+            }
             Button(
                 onClick = {
+                    val trimmedEmail = email.trim()
+                    val trimmedName = username.trim()
+
                     scope.launch {
                         isLoading = true
+                        errorMessage = null
                         try {
-
                             AppwriteManger.AppwriteManager.account.create(
                                 userId = io.appwrite.ID.unique(),
-                                email = email,
+                                email = trimmedEmail, // Use trimmed version
                                 password = passState.text.toString(),
-                                name = username
+                                name = trimmedName // Use trimmed version
                             )
-
-
                             AppwriteManger.AppwriteManager.account.createEmailPasswordSession(
                                 email = email,
                                 password = passState.text.toString()
@@ -236,10 +245,13 @@ fun SignUpPage(onBackToLogin: () -> Unit, onSignUpSuccess: () -> Unit) {
 
                             onSignUpSuccess() // Navigate to home
                         } catch (e: Exception) {
-                            // Handle errors like 'email already exists'
-                            println("Signup Error: ${e.message}")
-                        } finally {
                             isLoading = false
+                            // Resolve the reference by assigning the message
+                            errorMessage = when {
+                                e.message?.contains("already exists") == true -> "This email is already registered."
+                                e.message?.contains("network", ignoreCase = true) == true -> "Network error. Please check your data."
+                                else -> "Signup failed. Please check your details."
+                            }
                         }
                     }
                 },
@@ -255,7 +267,7 @@ fun SignUpPage(onBackToLogin: () -> Unit, onSignUpSuccess: () -> Unit) {
                     .padding(start = 20.dp, end = 20.dp, top = 25.dp)
                     .height(50.dp)
                     .fillMaxWidth()
-                //.background(GreyMain)
+
 
             ) {
                 if (isLoading) {
@@ -266,17 +278,6 @@ fun SignUpPage(onBackToLogin: () -> Unit, onSignUpSuccess: () -> Unit) {
                 } else {
                     Text(text = "Sign Up", fontSize = 20.sp)
                 }
-                /*Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    //color = GreenMain
-                ) {
-                    Text(
-                        text = "Sign Up",
-                        fontSize = 20.sp,
-                        modifier = Modifier
-                    )
-                }*/
-
             }
             Text(
                 buildAnnotatedString {

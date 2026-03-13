@@ -1,7 +1,8 @@
 package com.example.safemeal.screens
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,52 +21,65 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.safemeal.R
 import com.example.safemeal.ui.theme.GreenMain
 import com.example.safemeal.ui.theme.GreyMain
 import com.example.safemeal.ui.theme.Manrope
-import com.example.safemeal.ui.theme.SafeMealTheme
 import com.example.safemeal.ui.theme.WhiteMain
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import coil.compose.AsyncImage
+import com.example.safemeal.data.restaurant.Restaurant
+import com.example.safemeal.data.reviews.ReviewRepository
+import kotlinx.coroutines.launch
 
 
 @Composable
 fun RestaurantDetailsPage(
-    restaurant: com.example.safemeal.Restaurant,
+    restaurant: Restaurant,
     onBack: () -> Unit,
-    onNavigate: () -> Unit // Add this lambda for the button action
+    onNavigate: () -> Unit, // Add this lambda for the button action
+    imageUrlProvider: (String) -> String
 ) {
-    val menuItems = listOf(
-        MenuItem("Classic Hummus", "Creamy chickpeas with olive oil", "KES 650"),
-        MenuItem("Falafel Wrap", "Crispy falafel with fresh tahini", "KES 850"),
-        MenuItem("Sattvic Thali", "Pure vegetarian platter with lentils", "KES 1,200")
-    )
+    val menuItems = remember(restaurant) { restaurant.getMenuItemsList() }
+    val restaurantImageUrl = remember(restaurant.imgid) {
+        imageUrlProvider(restaurant.imgid ?: "")
+    }
+    var rating by remember { mutableIntStateOf(0) }
+    var comment by remember { mutableStateOf("") }
+    var isSubmitting by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    var hasAlreadyReviewed by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Check review status when page opens
+    LaunchedEffect(restaurant.id) {
+        hasAlreadyReviewed = com.example.safemeal.data.reviews.ReviewRepository.hasUserReviewed(restaurant.id)
+    }
     Scaffold(
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = {
-                    // Option A: Trigger your internal Mapbox Navigation logic (FR2)
                     onNavigate()
-
-                    // Option B: Launch an external Map Intent as a fallback
-                    /* val gmmIntentUri = Uri.parse("google.navigation:q=${restaurant.location}")
-                    val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                    context.startActivity(mapIntent)
-                    */
                 },
                 containerColor = GreenMain,
                 contentColor = WhiteMain,
@@ -88,11 +102,14 @@ fun RestaurantDetailsPage(
                         .height(250.dp)
                         .fillMaxWidth()
                 ) {
-                    Image(
-                        painter = painterResource(R.drawable.pfp),
-                        contentDescription = null,
+                    AsyncImage(
+                        model = restaurantImageUrl,
+                        contentDescription = "Image of ${restaurant.name}",
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        // Fallback in case the network fails
+                        placeholder = painterResource(R.drawable.logo2),
+                        error = painterResource(R.drawable.logo2)
                     )
                     IconButton(
                         onClick = onBack,
@@ -157,15 +174,53 @@ fun RestaurantDetailsPage(
             }
 
             // 3. The Menu List
+// The dynamic list
             items(menuItems) { menu ->
                 MenuListItem(menu)
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 20.dp),
-                    thickness = 0.5.dp,
-                    color = GreyMain.copy(alpha = 0.2f)
-                )
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
             }
-        }
+
+            if (menuItems.isEmpty()) {
+                item {
+                    Text("No menu items found.", modifier = Modifier.padding(20.dp))
+                }
+            }
+            // ... existing items(menuItems) block ...
+            item {
+                if (hasAlreadyReviewed) {
+                    // Show the "Locked" state UI we created earlier
+                    ReviewLockedCard()
+                } else {
+                    ReviewInputSection(
+                        restaurantId = restaurant.id,
+                        currentRating = rating,
+                        currentComment = comment,
+                        isSubmitting = isSubmitting,
+                        onRatingChange = { rating = it },
+                        onCommentChange = { comment = it },
+                        onSubmit = {
+                            scope.launch {
+                                isSubmitting = true
+                                val result = ReviewRepository.addReview(restaurant.id, rating, comment)
+                                when (result) {
+                                    "SUCCESS" -> {
+                                        rating = 0
+                                        comment = ""
+                                        hasAlreadyReviewed = true // Switch to locked state
+                                    }
+                                    "ALREADY_REVIEWED" -> {
+                                        hasAlreadyReviewed = true
+                                        errorMessage = "Already reviewed!"
+                                    }
+                                    else -> { errorMessage = "Error posting review" }
+                                }
+                                isSubmitting = false
+                            }
+                        }
+                    )
+                }
+            }
+    }
     }
 }
 @Composable
@@ -190,6 +245,7 @@ fun MenuListItem(menu: MenuItem) {
     }
 }
 
+
 data class MenuItem(val name: String, val description: String, val price: String)
 @Composable
 fun InfoRow(icon: Int, title: String, subtitle: String?) {
@@ -204,16 +260,113 @@ fun InfoRow(icon: Int, title: String, subtitle: String?) {
         }
     }
 }
-/*
-@Preview(showBackground = true, name = "Standard View")
-@Composable
-fun RestaurantDetailsMockPreview() {
 
-    SafeMealTheme {
-        RestaurantDetailsPage(
-            restaurant = ,
-            onBack = {},
-            onNavigate = {}
+@Composable
+fun ReviewInputSection(
+    restaurantId: String,
+    currentRating: Int,
+    currentComment: String,
+    isSubmitting: Boolean,
+    onRatingChange: (Int) -> Unit,
+    onCommentChange: (String) -> Unit,
+    onSubmit: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(20.dp)
+            .background(GreyMain.copy(alpha = 0.05f), RoundedCornerShape(16.dp))
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "RATE & REVIEW",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = GreyMain
+        )
+
+        // 1. Star Selection
+        Row(modifier = Modifier.padding(vertical = 12.dp)) {
+            repeat(5) { index ->
+                val starValue = index + 1
+                Icon(
+                    painter = painterResource(id = R.drawable.stars),
+                    contentDescription = null,
+                    tint = if (starValue <= currentRating) Color(0xFFD96F2F) else Color.LightGray,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clickable { onRatingChange(starValue) }
+                )
+            }
+        }
+
+        // 2. Comment Input
+        androidx.compose.material3.TextField(
+            value = currentComment,
+            onValueChange = onCommentChange,
+            placeholder = { Text("Share your experience...") },
+            modifier = Modifier.fillMaxWidth(),
+            colors = androidx.compose.material3.TextFieldDefaults.colors(
+                focusedContainerColor = WhiteMain,
+                unfocusedContainerColor = WhiteMain.copy(alpha = 0.5f),
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            )
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // 3. Submit Button
+        androidx.compose.material3.Button(
+            onClick = onSubmit,
+            enabled = currentRating > 0 && !isSubmitting,
+            modifier = Modifier.align(Alignment.Start), // Aligned to end for better thumb reach
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = GreenMain)
+        ) {
+            if (isSubmitting) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = WhiteMain,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Text("Post Review", color = WhiteMain, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+@Composable
+fun ReviewLockedCard() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(20.dp)
+            .background(GreenMain.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+            .border(1.dp, GreenMain.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.check), // Ensure you have a check icon
+            contentDescription = null,
+            tint = GreenMain,
+            modifier = Modifier.size(40.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = "Feedback Received",
+            fontWeight = FontWeight.Bold,
+            fontFamily = Manrope,
+            color = GreenMain,
+            fontSize = 18.sp
+        )
+        Text(
+            text = "You've already shared your safety experience for this restaurant. Thank you for helping the community!",
+            textAlign = TextAlign.Center,
+            fontFamily = Manrope,
+            fontSize = 14.sp,
+            color = Color.Gray,
+            modifier = Modifier.padding(top = 4.dp)
         )
     }
-}*/
+}

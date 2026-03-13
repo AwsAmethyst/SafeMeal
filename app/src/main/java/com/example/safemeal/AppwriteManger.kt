@@ -5,6 +5,7 @@ import io.appwrite.Client
 import io.appwrite.services.Account
 import io.appwrite.services.Databases
 import io.appwrite.services.Storage
+import kotlinx.coroutines.launch
 
 
 object AppwriteManger {
@@ -23,6 +24,17 @@ object AppwriteManger {
             account = Account(client)
             databases = Databases(client)
             storage = Storage(client)
+
+            kotlinx.coroutines.GlobalScope.launch {
+                try {
+                    // Fetching a public resource or server info
+                    // If this fails, your Endpoint or Project ID is definitely wrong
+                    val response = account.get()
+                    android.util.Log.d("AppwriteInit", "Handshake successful: $response")
+                } catch (e: Exception) {
+                    android.util.Log.e("AppwriteInit", "Handshake failed: ${e.message}")
+                }
+            }
         }
     }
 }

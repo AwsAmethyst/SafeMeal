@@ -59,6 +59,8 @@ dependencies {
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.ui.tooling.preview)
+    implementation(libs.androidx.foundation)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -70,5 +72,7 @@ dependencies {
     implementation("com.mapbox.maps:android-ndk27:11.18.2")
     implementation("com.mapbox.extension:maps-compose-ndk27:11.18.2")
     implementation("io.appwrite:sdk-for-android:5.1.0")
+    debugImplementation(libs.androidx.ui.tooling)
+    implementation("io.coil-kt:coil-compose:2.6.0")
 
-    }
+}

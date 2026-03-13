@@ -1,4 +1,4 @@
-package com.example.safemeal
+package com.example.safemeal.data.restaurant
 
 import android.util.Log
 import androidx.compose.runtime.getValue
@@ -8,6 +8,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 
+private const val DATABASE_ID = "69a59507000db58c7721"
+private const val COLLECTION_ID = "verified_restaurants"
+
+private const val BUCKET_ID = "safemealimg"
 class RestaurantViewModel : ViewModel() {
     var restaurants by mutableStateOf<List<Restaurant>>(emptyList())
         private set
@@ -19,10 +23,6 @@ class RestaurantViewModel : ViewModel() {
     var userDietaryChoice by mutableStateOf<String?>(null)
         private set
 
-    /**
-     * FR3: Personalized Fetch
-     * This first gets the user's preference, then filters the map pins.
-     */
     fun loadPersonalizedContent(userId: String) {
         viewModelScope.launch {
             isLoading = true
@@ -58,10 +58,10 @@ class RestaurantViewModel : ViewModel() {
         }
     }
 */
-    var selectedRestaurantForDetails by mutableStateOf<com.example.safemeal.Restaurant?>(null)
+    var selectedRestaurantForDetails by mutableStateOf<Restaurant?>(null)
 
     // Optional: A helper function to set it
-    fun selectRestaurant(restaurant: com.example.safemeal.Restaurant) {
+    fun selectRestaurant(restaurant: Restaurant) {
         selectedRestaurantForDetails = restaurant
     }
 }

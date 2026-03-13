@@ -1,9 +1,7 @@
 package com.example.safemeal.screens
 
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -13,10 +11,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -29,25 +23,25 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.safemeal.R
 import com.example.safemeal.ui.theme.GreenMain
-import com.example.safemeal.ui.theme.GreyMain
 import com.example.safemeal.ui.theme.Manrope
 import com.example.safemeal.ui.theme.SafeMealTheme
 import com.example.safemeal.ui.theme.WhiteMain
 import androidx.navigation.compose.composable
-import com.example.safemeal.RestaurantViewModel
+import com.example.safemeal.data.restaurant.RestaurantViewModel
 
-// 1. Define your navigation routes in a clean way
 sealed class Screen(val route: String, val label: String, val icon: Int) {
     object Profile : Screen("profile", "Profile", R.drawable.profile)
     object Discover : Screen("discover", "Discover", R.drawable.explore)
     object Restaurants : Screen("restaurants", "Restaurants", R.drawable.restaurant)
+
+    object Dashboard : Screen("dashboard","Dashboard", R.drawable.dashboard)
 }
 
 @Composable
 fun HomePage(mainNavController: NavController) {
     val viewModel: RestaurantViewModel = viewModel()
     val bottomNavController = rememberNavController() // Local controller for tabs
-    val items = listOf(Screen.Profile, Screen.Discover, Screen.Restaurants)
+    val items = listOf(Screen.Profile, Screen.Dashboard, Screen.Discover) //,Screen.Restaurants)
 
     Scaffold(
         bottomBar = {
@@ -92,7 +86,7 @@ fun HomePage(mainNavController: NavController) {
         // 2. The NavHost manages the actual screen switching
         NavHost(
             navController = bottomNavController,
-            startDestination = Screen.Discover.route,
+            startDestination = Screen.Dashboard.route,
             modifier = Modifier.padding(innerPadding) // Fixes the "overlap" issue
         ) {
             composable(Screen.Profile.route) {
@@ -114,22 +108,19 @@ fun HomePage(mainNavController: NavController) {
 
                 if (selected != null) {
                     RestaurantDetailsPage(
-                        restaurant = selected, // No more mockRestaurant!
+                        restaurant = selected,
                         onBack = { bottomNavController.popBackStack() },
-                        onNavigate = {
-                            // Logic to open Google Maps navigation
-                            //val gmmIntentUri = android.net.Uri.parse("google.navigation:q=${selected.latitude},${selected.longitude}")
-                            //val mapIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, gmmIntentUri)
-                            // context.startActivity(mapIntent) // Ensure you have context here
+                        onNavigate = {},
+                        imageUrlProvider = { fileId ->
+                            // Direct call to your Appwrite Storage service
+                            "https://fra.cloud.appwrite.io/v1/storage/buckets/safemealimg/files/$fileId/view?project=safemealapp"
                         }
                     )
-                } else {
-                    // Fallback if someone navigates here directly without clicking a pin
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Select a restaurant from the map first")
-                    }
             }
         }
+            composable(Screen.Dashboard.route){
+                DashboardPage()
+            }
     }
     }
 }
