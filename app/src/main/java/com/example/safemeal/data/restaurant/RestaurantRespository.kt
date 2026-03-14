@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.safemeal.AppwriteManger
 import com.example.safemeal.AppwriteManger.AppwriteManager.databases
 import com.example.safemeal.data.reviews.Review
+import com.example.safemeal.data.reviews.ReviewRepository
 import io.appwrite.Query
 import io.appwrite.services.Storage
 
@@ -97,4 +98,48 @@ object RestaurantRepository {
             emptyList()
         }
     }
+    suspend fun getAllRestaurants(): List<Restaurant> {
+        return try {
+            val response = AppwriteManger.AppwriteManager.databases.listDocuments(
+                databaseId = DATABASE_ID,
+                collectionId = COLLECTION_ID,
+                // We set a limit of 100 to ensure we get more than the default 25
+                queries = listOf(io.appwrite.Query.limit(100))
+            )
+            // Map the Appwrite documents to your Restaurant data class
+            response.documents.map { doc ->
+                Restaurant.from(doc.data, doc.id)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("RestaurantRepo", "Error fetching restaurants: ${e.message}")
+            emptyList()
+        }
+    }
+    // Inside RestaurantRepository.kt
+// Inside RestaurantRepository.kt
+    suspend fun getRestaurantsByTags(userTags: List<String>): List<Restaurant> {
+        if (userTags.isEmpty()) return getAllRestaurants()
+
+        return try {
+            val response = AppwriteManger.AppwriteManager.databases.listDocuments(
+                databaseId = DATABASE_ID,
+                collectionId = COLLECTION_ID,
+                queries = listOf(
+                    // Using 'contains' works for both Array attributes
+                    // and searching within a String attribute
+                    io.appwrite.Query.contains("tags", userTags[0])
+                )
+            )
+
+            if (response.documents.isEmpty()) {
+                getAllRestaurants()
+            } else {
+                response.documents.map { Restaurant.from(it.data, it.id) }
+            }
+        } catch (e: Exception) {
+            Log.e("RestaurantRepo", "Filter error: ${e.message}")
+            getAllRestaurants()
+        }
+    }
+
 }

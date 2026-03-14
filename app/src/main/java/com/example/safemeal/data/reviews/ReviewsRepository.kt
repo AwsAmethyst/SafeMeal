@@ -2,6 +2,7 @@ package com.example.safemeal.data.reviews
 
 import android.util.Log
 import com.example.safemeal.AppwriteManger
+import com.example.safemeal.data.restaurant.Restaurant
 import io.appwrite.ID
 import io.appwrite.Query
 
@@ -78,6 +79,72 @@ object ReviewRepository {
             response.total > 0
         } catch (e: Exception) {
             false
+        }
+    }
+
+    data class RatingSummary(
+        val average: Double,
+        val count: Int
+    )
+
+    suspend fun getRatingSummary(restaurantId: String): RatingSummary {
+        return try {
+            val response = AppwriteManger.AppwriteManager.databases.listDocuments(
+                databaseId = DATABASE_ID,
+                collectionId = "reviews",
+                queries = listOf(
+                    io.appwrite.Query.equal("restaurant_id", restaurantId)
+                )
+            )
+
+            val ratings = response.documents.map {
+                (it.data["rating"] as? Number)?.toDouble() ?: 0.0
+            }
+
+            if (ratings.isEmpty()) {
+                RatingSummary(0.0, 0)
+            } else {
+                RatingSummary(
+                    average = ratings.average(),
+                    count = ratings.size
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("ReviewRepo", "Error calculating summary: ${e.message}")
+            RatingSummary(0.0, 0)
+        }
+    }
+    suspend fun getUserReviewCount(userId: String): Int {
+        return try {
+            val response = AppwriteManger.AppwriteManager.databases.listDocuments(
+                databaseId = DATABASE_ID,
+                collectionId = COLLECTION_ID,
+                queries = listOf(
+                    io.appwrite.Query.equal("user_id", userId)
+                )
+            )
+            // .total is a Long in Appwrite, so we convert it to Int
+            response.total.toInt()
+        } catch (e: Exception) {
+            android.util.Log.e("ReviewRepo", "Error fetching user review count: ${e.message}")
+            0 // Return 0 if something fails
+        }
+    }
+    suspend fun getUserRecentReviews(userId: String, limit: Int = 3): List<com.example.safemeal.data.reviews.Review> {
+        return try {
+            val response = AppwriteManger.AppwriteManager.databases.listDocuments(
+                databaseId = DATABASE_ID,
+                collectionId = "reviews",
+                queries = listOf(
+                    io.appwrite.Query.equal("user_id", userId),
+                    io.appwrite.Query.orderDesc("\$createdAt"),
+                    io.appwrite.Query.limit(limit)
+                )
+            )
+            response.documents.map { com.example.safemeal.data.reviews.Review.from(it.data, it.id) }
+        } catch (e: Exception) {
+            Log.e("ReviewRepo", "Error fetching recent activity: ${e.message}")
+            emptyList()
         }
     }
 }

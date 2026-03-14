@@ -13,7 +13,8 @@ data class Restaurant(
     val longitude: Double,
     val latitude: Double,
     val menuJson: String?,
-    val imgid: String
+    val imgid: String,
+    val rating: Double = 0.0
 ) {
 
     fun getMenuItemsList(): List<MenuItem> {
@@ -49,7 +50,8 @@ data class Restaurant(
                 longitude = (coordinates?.get(0) as? Number)?.toDouble() ?: 0.0,
                 latitude = (coordinates?.get(1) as? Number)?.toDouble() ?: 0.0,
                 menuJson = map["menuItems"] as? String,
-                imgid = map["imgId"] as String
+                imgid = map["imgId"] as String,
+                rating = 0.0
             )
         }
     }

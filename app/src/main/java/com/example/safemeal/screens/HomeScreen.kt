@@ -119,7 +119,7 @@ fun HomePage(mainNavController: NavController) {
             }
         }
             composable(Screen.Dashboard.route){
-                DashboardPage()
+                DashboardPage(navController = bottomNavController, viewModel = viewModel)
             }
     }
     }

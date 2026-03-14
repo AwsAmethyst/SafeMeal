@@ -70,8 +70,15 @@ fun RestaurantDetailsPage(
     val scope = rememberCoroutineScope()
     var hasAlreadyReviewed by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var reviewsList by remember { mutableStateOf<List<com.example.safemeal.data.reviews.Review>>(emptyList()) }
+    var isLoadingReviews by remember { mutableStateOf(true) }
 
-    // Check review status when page opens
+    LaunchedEffect(restaurant.id) {
+        isLoadingReviews = true
+        // Fetch the reviews
+        reviewsList = ReviewRepository.fetchReviews(restaurant.id)
+        isLoadingReviews = false
+    }
     LaunchedEffect(restaurant.id) {
         hasAlreadyReviewed = com.example.safemeal.data.reviews.ReviewRepository.hasUserReviewed(restaurant.id)
     }
@@ -185,7 +192,43 @@ fun RestaurantDetailsPage(
                     Text("No menu items found.", modifier = Modifier.padding(20.dp))
                 }
             }
-            // ... existing items(menuItems) block ...
+            item {
+                Text(
+                    text = "COMMUNITY REVIEWS",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = GreyMain,
+                    modifier = Modifier.padding(start = 20.dp, top = 24.dp, bottom = 8.dp)
+                )
+            }
+
+            if (isLoadingReviews) {
+                item {
+                    Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.CircularProgressIndicator(color = GreenMain, modifier = Modifier.size(24.dp))
+                    }
+                }
+            } else if (reviewsList.isEmpty()) {
+                item {
+                    Text(
+                        "No reviews yet. Be the first to share your experience!",
+                        modifier = Modifier.padding(20.dp),
+                        fontSize = 14.sp,
+                        color = Color.Gray,
+                        fontFamily = Manrope
+                    )
+                }
+            } else {
+                // 3. Render each review
+                items(reviewsList) { review ->
+                    ReviewListItem(
+                        userName = review.userName,
+                        rating = review.rating,
+                        comment = review.comment
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), thickness = 0.5.dp)
+                }
+            }
             item {
                 if (hasAlreadyReviewed) {
                     // Show the "Locked" state UI we created earlier
@@ -206,7 +249,10 @@ fun RestaurantDetailsPage(
                                     "SUCCESS" -> {
                                         rating = 0
                                         comment = ""
-                                        hasAlreadyReviewed = true // Switch to locked state
+                                        hasAlreadyReviewed = true
+                                        scope.launch {
+                                            reviewsList = ReviewRepository.fetchReviews(restaurant.id)
+                                        }
                                     }
                                     "ALREADY_REVIEWED" -> {
                                         hasAlreadyReviewed = true
@@ -368,5 +414,46 @@ fun ReviewLockedCard() {
             color = Color.Gray,
             modifier = Modifier.padding(top = 4.dp)
         )
+    }
+}
+@Composable
+fun ReviewListItem(userName: String, rating: Int, comment: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = userName,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                fontFamily = Manrope
+            )
+            // Show stars for this specific user's rating
+            Row {
+                repeat(rating) {
+                    Icon(
+                        painter = painterResource(R.drawable.stars),
+                        contentDescription = null,
+                        tint = Color(0xFFD96F2F),
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+            }
+        }
+        if (comment.isNotEmpty()) {
+            Text(
+                text = comment,
+                fontSize = 14.sp,
+                color = Color.DarkGray,
+                modifier = Modifier.padding(top = 4.dp),
+                fontFamily = Manrope
+            )
+        }
     }
 }
