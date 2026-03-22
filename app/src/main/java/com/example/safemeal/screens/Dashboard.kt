@@ -29,6 +29,7 @@ import com.example.safemeal.data.restaurant.Restaurant
 import com.example.safemeal.data.restaurant.RestaurantRepository
 import com.example.safemeal.data.restaurant.RestaurantViewModel
 import com.example.safemeal.data.reviews.ReviewRepository
+import com.example.safemeal.ui.theme.GreenMain
 import com.example.safemeal.ui.theme.GreyMain
 import com.example.safemeal.ui.theme.WhiteMain
 import kotlinx.coroutines.launch
@@ -50,13 +51,20 @@ fun DashboardPage(
     var userChoice by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     var recentActivity by remember { mutableStateOf<List<Pair<Restaurant, String>>>(emptyList()) }
+    var isAdmin by remember { mutableStateOf(false) }
+    var profileImageUrl by remember { mutableStateOf<String?>(null) } // New
 
 
     LaunchedEffect(Unit) {
         isLoading = true
         try {
+            val userProfile = AppwriteManger.AppwriteManager.account.get()
+            // Check if "admin" is in the user's labels
+            isAdmin = userProfile.labels.contains("admin")
+
             val user = AppwriteManger.AppwriteManager.account.get()
             userName = user.name.split(" ")[0]
+            profileImageUrl = AppwriteManger.AppwriteManager.getUserProfilePictureUrl(userProfile.id)
 
             viewModel.fetchRestaurants()
 
@@ -81,6 +89,7 @@ fun DashboardPage(
 
         } catch (e: Exception) {
             Log.e("Dashboard", "Error: ${e.message}")
+            Log.e("Dashboard", "Admin check failed")
         } finally {
             isLoading = false
         }
@@ -116,6 +125,7 @@ fun DashboardPage(
                 // Refresh the review count
                 val user = AppwriteManger.AppwriteManager.account.get()
                 reviewCount = ReviewRepository.getUserReviewCount(user.id)
+                profileImageUrl = AppwriteManger.AppwriteManager.getUserProfilePictureUrl(user.id)
             } finally {
                 isRefreshing = false
             }
@@ -123,7 +133,7 @@ fun DashboardPage(
     }
     Scaffold(
         containerColor = BackgroundLight
-    ) { padding ->
+    ) { innerpadding ->
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = PrimaryGreen)
@@ -133,23 +143,24 @@ fun DashboardPage(
                 state = refreshState,
                 isRefreshing = isRefreshing,
                 onRefresh = { onRefresh() },
-                modifier = Modifier.padding(padding),
+                modifier = Modifier.padding(top = 0.dp),
                 indicator = {
                     PullToRefreshDefaults.Indicator(
                         state = refreshState,
                         isRefreshing = isRefreshing,
                         containerColor = WhiteMain,
-                        color = PrimaryGreen
+                        color = PrimaryGreen,
+                        modifier = Modifier.align(Alignment.TopCenter)
                     )
                 }
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(padding)
+                        .padding(innerpadding)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    HeaderSection(userName)
+                    HeaderSection(userName,profileImageUrl)
                     SafetyImpactCard(reviewCount)
                     TopRatedSection(
                         restaurants = viewModel.hotRestaurants,
@@ -181,13 +192,36 @@ fun DashboardPage(
                             }
                         }
                     )
+                    if (isAdmin) {
+                        Button(
+                            onClick = {
+                                viewModel.selectedRestaurantForDetails = null
+                                navController.navigate("manage_restaurant")
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 16.dp,
+                                    start = 20.dp,
+                                    end = 20.dp)
+                                .height(50.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = GreenMain)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Spacer(Modifier.width(8.dp))
+                                Text("Add New Restaurant", fontWeight = FontWeight.Bold)
+                            }
+
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(100.dp))
                 }
             }
         }
     }
 }
 @Composable
-fun HeaderSection(name: String) {
+fun HeaderSection(name: String,profileImageUrl: String?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -196,14 +230,17 @@ fun HeaderSection(name: String) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Image(
-                painter = painterResource(R.drawable.pfp),
+            coil.compose.AsyncImage(
+                model = profileImageUrl,
                 contentDescription = "Avatar",
                 modifier = Modifier
-                    .size(60.dp) // Adjusted size for better layout
+                    .size(60.dp)
                     .clip(CircleShape)
                     .border(2.dp, PrimaryGreen.copy(alpha = 0.2f), CircleShape),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                // Fallbacks to your local placeholder if loading fails or URL is null
+                placeholder = painterResource(R.drawable.pfp),
+                error = painterResource(R.drawable.pfp)
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column {

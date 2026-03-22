@@ -1,5 +1,6 @@
 package com.example.safemeal.screens
 
+import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -212,8 +213,10 @@ fun LoginPage(onNavigateToSignUp: () -> Unit, onLoginSuccess: () -> Unit) {
 
             Button(
                 onClick = {
-                    val sanitizedEmail = text.trim().lowercase() // Prevents trailing space errors
-                    if (sanitizedEmail.isEmpty() || passState.text.isEmpty()) {
+                    val sanitizedEmail = text.trim().lowercase()
+                    val password = passState.text.toString() // Convert TextFieldState to String
+
+                    if (sanitizedEmail.isEmpty() || password.isEmpty()) {
                         errorMessage = "Please fill in all fields"
                         return@Button
                     }
@@ -222,20 +225,33 @@ fun LoginPage(onNavigateToSignUp: () -> Unit, onLoginSuccess: () -> Unit) {
                         isLoading = true
                         errorMessage = null
                         try {
-                            // Use sanitizedEmail instead of raw email state
+                            // 1. Try to delete any "Ghost" sessions first to clear the 'Guest' role
+                            try {
+                                AppwriteManger.AppwriteManager.account.deleteSession("current")
+                            } catch (e: Exception) {
+                                // Ignore if no session exists
+                            }
+
+                            // 2. Perform the actual Login
                             AppwriteManger.AppwriteManager.account.createEmailPasswordSession(
                                 email = sanitizedEmail,
-                                password = passState.text.toString()
+                                password = password
                             )
+
+                            isLoading = false
                             onLoginSuccess()
                         } catch (e: Exception) {
                             isLoading = false
-                            // Smart error messaging
+                            Log.e("AppwriteAuth", "Login Error: ${e.message}", e)
+
+                            // 3. Expanded Error Messaging for Debugging
                             errorMessage = when {
                                 e.message?.contains("401") == true -> "Incorrect email or password."
-                                e.message?.contains("409") == true -> "Email already exists."
-                                e.message?.contains("network", true) == true -> "No internet connection."
-                                else -> "An unexpected error occurred."
+                                e.message?.contains("403") == true -> "Platform access denied. Check Appwrite Console Package Name."
+                                e.message?.contains("404") == true -> "Project ID or Endpoint is incorrect."
+                                e.message?.contains("network", true) == true || e.message?.contains("Handshake", true) == true ->
+                                    "Network error. Check if your phone has Internet."
+                                else -> e.message ?: "An unexpected error occurred."
                             }
                         }
                     }

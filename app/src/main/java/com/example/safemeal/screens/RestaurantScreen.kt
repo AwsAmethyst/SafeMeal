@@ -35,6 +35,7 @@ import com.example.safemeal.ui.theme.GreyMain
 import com.example.safemeal.ui.theme.Manrope
 import com.example.safemeal.ui.theme.WhiteMain
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
@@ -48,15 +49,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import coil.compose.AsyncImage
+import com.example.safemeal.AppwriteManger
 import com.example.safemeal.data.restaurant.Restaurant
 import com.example.safemeal.data.reviews.ReviewRepository
 import kotlinx.coroutines.launch
+import androidx.compose.material3.ButtonDefaults
 
 
 @Composable
 fun RestaurantDetailsPage(
     restaurant: Restaurant,
     onBack: () -> Unit,
+    viewModel: com.example.safemeal.data.restaurant.RestaurantViewModel, // Add this
+    navController: androidx.navigation.NavController,
     onNavigate: () -> Unit, // Add this lambda for the button action
     imageUrlProvider: (String) -> String
 ) {
@@ -72,8 +77,14 @@ fun RestaurantDetailsPage(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var reviewsList by remember { mutableStateOf<List<com.example.safemeal.data.reviews.Review>>(emptyList()) }
     var isLoadingReviews by remember { mutableStateOf(true) }
+    var isAdmin by remember { mutableStateOf(false) }
 
     LaunchedEffect(restaurant.id) {
+
+        val userProfile = AppwriteManger.AppwriteManager.account.get()
+        // Check if "admin" is in the user's labels
+        isAdmin = userProfile.labels.contains("admin")
+
         isLoadingReviews = true
         // Fetch the reviews
         reviewsList = ReviewRepository.fetchReviews(restaurant.id)
@@ -82,24 +93,12 @@ fun RestaurantDetailsPage(
     LaunchedEffect(restaurant.id) {
         hasAlreadyReviewed = com.example.safemeal.data.reviews.ReviewRepository.hasUserReviewed(restaurant.id)
     }
-    Scaffold(
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = {
-                    onNavigate()
-                },
-                containerColor = GreenMain,
-                contentColor = WhiteMain,
-                shape = RoundedCornerShape(16.dp),
-                icon = { Icon(painterResource(R.drawable.explore), contentDescription = null) },
-                text = { Text("Directions", fontFamily = Manrope, fontWeight = FontWeight.Bold) }
-            )
-        }
-    ) { innerpadding ->
+    Scaffold() { innerpadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(WhiteMain),
+                .background(WhiteMain)
+                .padding(innerpadding),
             contentPadding = innerpadding
         ) {
             // 1. Hero Image Section
@@ -126,8 +125,28 @@ fun RestaurantDetailsPage(
                     ) {
                         Icon(painterResource(R.drawable.arrow_back), contentDescription = "Back")
                     }
+                    if (isAdmin) {
+                        IconButton(
+                            onClick = {
+                                // Set the restaurant in the VM so ManageRestaurantScreen knows who to edit
+                                viewModel.selectedRestaurantForDetails = restaurant
+                                navController.navigate("manage_restaurant")
+                            },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd) // Put it on the opposite side
+                                .padding(16.dp)
+                                .background(WhiteMain, CircleShape)
+                        ) {
+                            // Use a default edit icon or your own resource
+                            Icon(
+                                painterResource(R.drawable.edit),
+                                contentDescription = "Edit Restaurant",
+                                tint = GreenMain
+                            )
+                        }
+                    }
                 }
-            }
+                }
 
             // 2. Restaurant Identity & Info Section
             item {
@@ -169,6 +188,36 @@ fun RestaurantDetailsPage(
                         modifier = Modifier.padding(vertical = 8.dp),
                         thickness = 0.5.dp
                     )
+                    Button(
+                        onClick = { onNavigate() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp)
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GreenMain,
+                            contentColor = WhiteMain
+                        )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.explore),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Get Directions",
+                                fontFamily = Manrope,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
 
                     Text(
                         text = "MENU ITEMS",
@@ -179,7 +228,6 @@ fun RestaurantDetailsPage(
                     )
                 }
             }
-
             // 3. The Menu List
 // The dynamic list
             items(menuItems) { menu ->
@@ -244,7 +292,7 @@ fun RestaurantDetailsPage(
                         onSubmit = {
                             scope.launch {
                                 isSubmitting = true
-                                val result = ReviewRepository.addReview(restaurant.id, rating, comment)
+                                val result = ReviewRepository.addReview(restaurant.id, rating, comment,restaurant.name )
                                 when (result) {
                                     "SUCCESS" -> {
                                         rating = 0
@@ -265,6 +313,9 @@ fun RestaurantDetailsPage(
                         }
                     )
                 }
+            }
+            item {
+                Spacer(modifier = Modifier.height(100.dp))
             }
     }
     }

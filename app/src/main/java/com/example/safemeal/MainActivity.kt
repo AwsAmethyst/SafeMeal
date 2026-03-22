@@ -1,11 +1,14 @@
 package com.example.safemeal
 
 
+import android.Manifest
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -29,23 +32,70 @@ import androidx.navigation.compose.rememberNavController
 import com.example.safemeal.screens.HomePage
 import com.example.safemeal.screens.LoginPage
 import com.example.safemeal.screens.SignUpPage
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import com.mapbox.common.MapboxOptions
+import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
+import com.mapbox.navigation.base.options.NavigationOptions
 
 
 class MainActivity : ComponentActivity() {
+
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+        if (fineLocationGranted) {
+            Log.d("SafeMeal", "GPS Permission Granted - Navigation Ready")
+        } else {
+            Toast.makeText(this, "Precise location is required for Navigation", Toast.LENGTH_LONG).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 1. Setup Singleton
+        if (!MapboxNavigationApp.isSetup()) {
+            MapboxOptions.accessToken = getString(R.string.mapbox_access_token)
+            MapboxNavigationApp.setup {
+                NavigationOptions.Builder(this)
+                     //.accessToken(getString(R.string.mapbox_access_token))
+                    .build()
+            }
+        }
+
+        // 2. Initial Setup
+        checkAndRequestLocationPermissions()
         AppwriteManger.AppwriteManager.init(applicationContext)
         enableEdgeToEdge()
+
         setContent {
             SafeMealTheme {
                 SafeMealApp()
             }
         }
     }
+
+    // --- ADD THESE LIFECYCLE METHODS ---
+    override fun onStart() {
+        super.onStart()
+        MapboxNavigationApp.attach(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        MapboxNavigationApp.detach(this)
+    }
+    // -----------------------------------
+
+    private fun checkAndRequestLocationPermissions() {
+        requestPermissionLauncher.launch(arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ))
+    }
 }
+
+
 @Composable
 fun SafeMealApp(){
     val navController = rememberNavController()

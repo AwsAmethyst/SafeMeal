@@ -1,12 +1,21 @@
 package com.example.safemeal.data.restaurant
 
+import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.safemeal.AppwriteManger
 import com.example.safemeal.data.reviews.ReviewRepository
+import com.mapbox.geojson.Point
+import kotlinx.coroutines.launch
+import java.io.File
+import android.content.Context
+import android.widget.Toast
+import io.appwrite.ID
+import io.appwrite.models.InputFile
 import kotlinx.coroutines.launch
 
 private const val DATABASE_ID = "69a59507000db58c7721"
@@ -14,6 +23,7 @@ private const val COLLECTION_ID = "verified_restaurants"
 
 private const val BUCKET_ID = "safemealimg"
 class RestaurantViewModel : ViewModel() {
+    //val userLocation: Point
     var restaurants by mutableStateOf<List<Restaurant>>(emptyList())
         private set
 
@@ -153,6 +163,83 @@ class RestaurantViewModel : ViewModel() {
 
             } catch (e: Exception) {
                 Log.e("RestaurantVM", "Failed to sort: ${e.message}")
+            }
+        }
+    }
+
+    // In your ViewModel
+    fun saveRestaurant(restaurant: Restaurant, isEdit: Boolean) {
+        viewModelScope.launch {
+            try {
+                val locationPoint = listOf(restaurant.longitude, restaurant.latitude)
+
+                val data = mapOf(
+                    "name" to restaurant.name,
+                    "address" to restaurant.address,
+                    "tags" to restaurant.tags,
+                    "location" to locationPoint,
+                    "menuItems" to restaurant.menuJson,
+                    "imgId" to restaurant.imgid
+                )
+
+                if (isEdit) {
+                    // UPDATE: Use the existing document ID
+                    AppwriteManger.AppwriteManager.databases.updateDocument(
+                        databaseId = DATABASE_ID,
+                        collectionId = COLLECTION_ID,
+                        documentId = restaurant.id,
+                        data = data
+                    )
+                    Log.d("Appwrite", "Restaurant Updated Successfully")
+                } else {
+                    // CREATE: Use ID.unique() for a new entry
+                    AppwriteManger.AppwriteManager.databases.createDocument(
+                        databaseId = DATABASE_ID,
+                        collectionId = COLLECTION_ID,
+                        documentId = io.appwrite.ID.unique(),
+                        data = data
+                    )
+                    Log.d("Appwrite", "Restaurant Created Successfully")
+                }
+                fetchRestaurants()
+            } catch (e: Exception) {
+                Log.e("Admin", "Save failed: ${e.message}")
+            }
+        }
+    }
+    // Inside RestaurantViewModel.kt
+    var imageUploadId by mutableStateOf("") // To track the ID for the form
+    var isUploading by mutableStateOf(false)
+
+    fun uploadRestaurantImage(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            isUploading = true
+            try {
+                // 1. Convert URI to a temporary file Appwrite can read
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val file = File(context.cacheDir, "temp_upload_${System.currentTimeMillis()}.jpg")
+                file.createNewFile()
+                inputStream?.use { input ->
+                    file.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+
+                // 2. Upload to Appwrite Storage
+                val result = AppwriteManger.AppwriteManager.storage.createFile(
+                    bucketId = "safemealimg", // Ensure this matches your Appwrite Console
+                    fileId = ID.unique(),
+                    file = InputFile.fromFile(file)
+                )
+
+                // 3. Save the resulting ID to use in our Database document
+                imageUploadId = result.id
+                Log.d("Admin", "Upload Success: ${result.id}")
+
+            } catch (e: Exception) {
+                Log.e("Admin", "Upload Error: ${e.message}")
+            } finally {
+                isUploading = false
             }
         }
     }

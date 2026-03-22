@@ -10,7 +10,7 @@ object ReviewRepository {
     private const val DATABASE_ID = "69a59507000db58c7721"
     private const val COLLECTION_ID = "reviews"
 
-    suspend fun addReview(restaurantId: String, rating: Int, comment: String): String {
+    suspend fun addReview(restaurantId: String, rating: Int, comment: String,restaurantName: String): String {
         return try {
             val user = AppwriteManger.AppwriteManager.account.get()
 
@@ -39,7 +39,8 @@ object ReviewRepository {
                     "user_id" to user.id,
                     "user_name" to user.name,
                     "rating" to rating,
-                    "comment" to comment
+                    "comment" to comment,
+                    "restaurant_name" to restaurantName
                 )
             )
             "SUCCESS"
@@ -145,6 +146,61 @@ object ReviewRepository {
         } catch (e: Exception) {
             Log.e("ReviewRepo", "Error fetching recent activity: ${e.message}")
             emptyList()
+        }
+    }
+    suspend fun fetchUserReviews(): List<com.example.safemeal.data.reviews.Review> {
+        return try {
+            val user = AppwriteManger.AppwriteManager.account.get()
+            val response = AppwriteManger.AppwriteManager.databases.listDocuments(
+                databaseId = DATABASE_ID,
+                collectionId = COLLECTION_ID,
+                queries = listOf(
+                    Query.equal("user_id", user.id), // Matches your underscore naming
+                    Query.orderDesc("\$createdAt")
+                )
+            )
+            response.documents.map { com.example.safemeal.data.reviews.Review.from(it.data, it.id) }
+        } catch (e: Exception) {
+            Log.e("ReviewRepo", "Error fetching user activity: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /**
+     * Updates an existing review (Edit Functionality)
+     */
+    suspend fun updateReview(reviewId: String, newRating: Int, newComment: String): String {
+        return try {
+            AppwriteManger.AppwriteManager.databases.updateDocument(
+                databaseId = DATABASE_ID,
+                collectionId = COLLECTION_ID,
+                documentId = reviewId,
+                data = mapOf(
+                    "rating" to newRating,
+                    "comment" to newComment
+                )
+            )
+            "SUCCESS"
+        } catch (e: Exception) {
+            Log.e("ReviewRepo", "Update failed: ${e.message}")
+            "ERROR"
+        }
+    }
+
+    /**
+     * Deletes a review (Delete Functionality)
+     */
+    suspend fun deleteReview(reviewId: String): String {
+        return try {
+            AppwriteManger.AppwriteManager.databases.deleteDocument(
+                databaseId = DATABASE_ID,
+                collectionId = COLLECTION_ID,
+                documentId = reviewId
+            )
+            "SUCCESS"
+        } catch (e: Exception) {
+            Log.e("ReviewRepo", "Delete failed: ${e.message}")
+            "ERROR"
         }
     }
 }

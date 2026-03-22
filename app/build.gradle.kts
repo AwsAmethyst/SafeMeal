@@ -62,6 +62,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.foundation)
     implementation(libs.foundation)
+    implementation(libs.play.services.location)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -75,5 +76,10 @@ dependencies {
     implementation("io.appwrite:sdk-for-android:5.1.0")
     debugImplementation(libs.androidx.ui.tooling)
     implementation("io.coil-kt:coil-compose:2.6.0")
-
+    implementation("com.mapbox.navigationcore:android-ndk27:3.20.0-rc.1")
+    implementation("com.mapbox.navigationcore:ui-components-ndk27:3.20.0-rc.1")
+    implementation("com.mapbox.navigationcore:tripdata-ndk27:3.20.0-rc.1")
+    implementation("com.mapbox.navigationcore:ui-maps-ndk27:3.20.0-rc.1")
+    implementation("com.mapbox.navigationcore:voice-ndk27:3.20.0-rc.1")
+    implementation("com.google.code.gson:gson:2.10.1")
 }

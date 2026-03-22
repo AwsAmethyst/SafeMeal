@@ -100,8 +100,9 @@ fun DiscoverPage(navController: NavController, // 1. Added this parameter
         ) {
             val markerIcon = rememberIconImage(
                 key = "marker",
-                painter = painterResource(id = R.drawable.location), // Use your search icon as a temporary pin
+                painter = painterResource(id = R.drawable.location)// Use your search icon as a temporary pin
             )
+
             Log.d("SafeMealMap", "Total restaurants fetched: ${restaurants.size} ")
             restaurants.forEach { restaurant ->
                 //Log.d("SafeMealMap", "${restaurant.longitude} ${restaurant.latitude}")
@@ -116,7 +117,7 @@ fun DiscoverPage(navController: NavController, // 1. Added this parameter
                 ) {
 
                     iconImage = markerIcon // Assign the remembered icon image
-                    iconSize = 2.0
+                    iconSize = 2.0  
                 }
             }
         }

@@ -1,9 +1,11 @@
 package com.example.safemeal.screens
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,7 @@ import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -66,19 +69,44 @@ import com.example.safemeal.ui.theme.WhiteMain
 import kotlinx.coroutines.launch
 
 @Composable
-fun ProfilePage(innerPadding: PaddingValues, onLogout: () -> Unit) {
+fun ProfilePage(innerPadding: PaddingValues, onLogout: () -> Unit,onNavigateToReviews: () -> Unit) {
     var showLogoutDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var userName by remember { mutableStateOf("Loading...") }
-    //var userEmail by remember { mutableStateOf("") }
+    var userId by remember { mutableStateOf("") }
+    var profileImageUrl by remember { mutableStateOf<String?>(null) }
+    var isImageLoading by remember { mutableStateOf(true) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var isUploading by remember { mutableStateOf(false) }
+
+    // 1. The Image Picker Launcher
+    val pfpLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            scope.launch {
+                isUploading = true
+                val newId = AppwriteManger.AppwriteManager.updateProfilePicture(context, it)
+                if (newId != null) {
+                    // Force refresh the image URL with a timestamp to bypass cache
+                    profileImageUrl = AppwriteManger.AppwriteManager.getUserProfilePictureUrl(newId) + "&t=${System.currentTimeMillis()}"
+                }
+                isUploading = false
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         try {
-            // FR13: Fetch current user session details
+            //Fetch current user session details
             val user = AppwriteManger.AppwriteManager.account.get()
             userName = user.name
-            //userEmail = user.email
+
+            profileImageUrl = AppwriteManger.AppwriteManager.getUserProfilePictureUrl(user.id)
+
         } catch (e: Exception) {
             userName = "Guest User"
+            profileImageUrl = null // Use default
+            isImageLoading = false
         }
     }
     Column{
@@ -93,17 +121,36 @@ fun ProfilePage(innerPadding: PaddingValues, onLogout: () -> Unit) {
                     .height(50.dp)
             )
             Box(contentAlignment = Alignment.BottomEnd) {
-                Image(
-                    painter = painterResource(R.drawable.pfp),
+                coil.compose.AsyncImage(
+                    model = profileImageUrl,
                     contentDescription = "Avatar",
                     modifier = Modifier
                         .size(120.dp)
                         .clip(CircleShape)
-                        .border(4.dp, GreyMain.copy(alpha = 0.8f), CircleShape),
-                    contentScale = ContentScale.Crop
+                        // Add a border for that clean "Dashboard" look
+                        .border(4.dp, WhiteMain.copy(alpha = 0.6f), CircleShape),
+                    contentScale = ContentScale.Crop,
+                    // 3. Define Fallback / Loading states
+                    placeholder = painterResource(R.drawable.pfp), // Default while loading
+                    error = painterResource(R.drawable.pfp),       // Default if no image exists
+                    onLoading = { isImageLoading = true },
+                    onSuccess = { isImageLoading = false },
+                    onError = { isImageLoading = false }
                 )
+
+                // Show spinner OVER the placeholder while downloading
+                if (isImageLoading && profileImageUrl != null) {
+                    CircularProgressIndicator(
+                        color = WhiteMain,
+                        modifier = Modifier.align(Alignment.Center).size(30.dp),
+                        strokeWidth = 2.dp
+                    )
+                }
+                if (isUploading) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = WhiteMain)
+                }
                 FilledIconButton(
-                    onClick = { /* Edit profile */ },
+                    onClick = { pfpLauncher.launch("image/*") },
                     modifier = Modifier.size(36.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = GreyMain)
                 ) {
@@ -150,6 +197,7 @@ fun ProfilePage(innerPadding: PaddingValues, onLogout: () -> Unit) {
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column {
+                        /*
                         ProfileMenuItem("Saved Restaurants", R.drawable.bookmark)
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -159,8 +207,8 @@ fun ProfilePage(innerPadding: PaddingValues, onLogout: () -> Unit) {
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 16.dp),
                             thickness = 0.5.dp
-                        )
-                        ProfileMenuItem("Review Activity", R.drawable.reviews)
+                        )*/
+                        ProfileMenuItem("Review Activity", R.drawable.reviews,onClick = onNavigateToReviews)
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
@@ -178,9 +226,59 @@ fun ProfilePage(innerPadding: PaddingValues, onLogout: () -> Unit) {
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(100.dp))
             }
         }
+        //Spacer(modifier = Modifier.height(100.dp))
+    }
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = {
+                Text(
+                    text = "Log Out?",
+                    fontFamily = Manrope,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to log out of SafeMeal?",
+                    fontFamily = Manrope,
+                    fontWeight = FontWeight.Light
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showLogoutDialog = false
+                        scope.launch {
+                            try {
+                                // FR13: Terminate the current Appwrite session
+                                AppwriteManger.AppwriteManager.account.deleteSession("current")
+
+                                // Navigate back to log in and clear navigation history
+                                onLogout()
+                            } catch (e: Exception) {
+                                // Handle potential network errors (NFR1)
+                                Log.e("Logout", "Error logging out: ${e.message}")
+                            }
+                        }
+                        // Add your Appwrite logout logic here
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Log Out")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showLogoutDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = WhiteMain,
+            shape = RoundedCornerShape(16.dp)
+        )
     }
     if (showLogoutDialog) {
         AlertDialog(
@@ -237,6 +335,7 @@ fun ProfilePage(innerPadding: PaddingValues, onLogout: () -> Unit) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileFilterSection() {
+    var showSaveDialog by remember { mutableStateOf(false) }
     val dietaryOptions = listOf("Sattvic", "Halal", "Kosher")
     var selectedOption by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -292,23 +391,7 @@ fun ProfileFilterSection() {
                 }
             }
             Button(
-
-                onClick = {
-                    scope.launch {
-                        try {
-                            // Save preference to Appwrite Account
-                            val currentPrefs = mapOf("dietary_choice" to selectedOption)
-                            AppwriteManger.AppwriteManager.account.updatePrefs(prefs = currentPrefs)
-
-                            android.widget.Toast.makeText(
-                                context,
-                                "Preference updated to $selectedOption",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        } catch (e: Exception) {
-                            Log.e("Prefs", "Failed to save: ${e.message}")
-                        }
-                    }
+                onClick = { showSaveDialog = true;
                 },
                 modifier = Modifier
                     .padding(top = 15.dp)
@@ -333,11 +416,65 @@ fun ProfileFilterSection() {
                 }
             }
         }
+    if (showSaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveDialog = false },
+            title = {
+                Text(
+                    text = "Change Prefrence?",
+                    fontFamily = Manrope,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to change your dietary preference?",
+                    fontFamily = Manrope,
+                    fontWeight = FontWeight.Light
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSaveDialog = false
+                        scope.launch {
+                            try {
+                                // Save preference to Appwrite Account
+                                val currentPrefs = mapOf("dietary_choice" to selectedOption)
+                                AppwriteManger.AppwriteManager.account.updatePrefs(prefs = currentPrefs)
+
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Preference updated to $selectedOption",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            } catch (e: Exception) {
+                                Log.e("Prefs", "Failed to save: ${e.message}")
+                            }finally {
+                                showSaveDialog = false
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showSaveDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = WhiteMain,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
     }
 
 @Composable
-fun ProfileMenuItem(text: String, @DrawableRes iconResource: Int) {
+fun ProfileMenuItem(text: String, @DrawableRes iconResource: Int,onClick: () -> Unit = {}) {
     ListItem(
+        modifier = Modifier.clickable { onClick() },
         headlineContent = { Text(text, fontWeight = FontWeight.Bold) },
         leadingContent = {
             Surface(
@@ -353,11 +490,4 @@ fun ProfileMenuItem(text: String, @DrawableRes iconResource: Int) {
         trailingContent = { Icon(painter = painterResource(R.drawable.chevron_right), contentDescription = null, tint = Color.LightGray) },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent)
     )
-}
-@Preview
-@Composable
-fun ProfilePreview(){
-    SafeMealTheme {
-        ProfilePage(innerPadding = PaddingValues(0.dp),onLogout = {})
-    }
 }

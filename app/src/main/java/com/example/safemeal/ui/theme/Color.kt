@@ -18,3 +18,6 @@ val DarkGreenMain = Color(	0xff0f3831)
 val WhiteMain = Color( 	0xffffffff)
 
 val LightGreenMain = Color(0xff409c7d)
+
+val TextPrimary = Color(0xFF1C1B1F) // Almost black
+val TextSecondary = Color(0xFF49454F)

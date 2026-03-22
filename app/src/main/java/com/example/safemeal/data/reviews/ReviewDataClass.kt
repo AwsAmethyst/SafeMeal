@@ -6,7 +6,8 @@ data class Review(
     val userId: String,
     val userName: String,
     val rating: Int,
-    val comment: String
+    val comment: String,
+    val restaurantName: String
 ) {
     companion object {
         fun from(map: Map<String, Any>, documentId: String): Review {
@@ -16,7 +17,8 @@ data class Review(
                 userId = map["user_id"] as? String ?: "",
                 userName = map["user_name"] as? String ?: "Anonymous",
                 rating = (map["rating"] as? Number)?.toInt() ?: 0,
-                comment = map["comment"] as? String ?: ""
+                comment = map["comment"] as? String ?: "",
+                restaurantName = map["restaurant_name"]?.toString() ?: "Restaurant",
             )
         }
     }

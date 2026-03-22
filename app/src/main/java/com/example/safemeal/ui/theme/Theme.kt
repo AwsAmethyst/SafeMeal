@@ -9,6 +9,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
@@ -20,7 +21,11 @@ private val DarkColorScheme = darkColorScheme(
 private val LightColorScheme = lightColorScheme(
     primary = WhiteMain,
     secondary = GreenMain,
-    tertiary = GreyMain
+    tertiary = GreyMain,
+    onSurface = TextPrimary,
+    onSurfaceVariant = TextSecondary, // Used for secondary labels
+    background = Color.White,
+    onBackground = TextPrimary
 
     /* Other default colors to override
     background = Color(0xFFFFFBFE),
@@ -35,7 +40,7 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun SafeMealTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
