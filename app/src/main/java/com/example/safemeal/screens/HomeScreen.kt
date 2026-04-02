@@ -87,7 +87,28 @@ fun HomePage(mainNavController: NavController) {
     val viewModel: RestaurantViewModel = viewModel()
     val bottomNavController = rememberNavController()
     val items = listOf(Screen.Profile, Screen.Dashboard, Screen.Discover)
+    var finalStartDestination by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    var userIsAdmin by remember { mutableStateOf<Boolean?>(null) }
 
+    LaunchedEffect(Unit) {
+        try {
+            val user = com.example.safemeal.AppwriteManger.AppwriteManager.account.get()
+            userIsAdmin = user.labels.contains("admin")
+            // If the user has the "admin" label, set their home to the Admin Dashboard
+        } catch (e: Exception) {
+            // Fallback to standard dashboard if check fails
+            userIsAdmin = false
+        }
+    }
+
+    if (userIsAdmin == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = GreenMain)
+        }
+    } else {
+        // CHANGE: Determine the dynamic start route for THIS user
+        val startRoute = if (userIsAdmin!!) "admin_dashboard" else Screen.Dashboard.route
     Scaffold(
         bottomBar = {
             NavigationBar(
@@ -99,10 +120,22 @@ fun HomePage(mainNavController: NavController) {
                 val currentRoute = navBackStackEntry?.destination?.route
 
                 items.forEach { item ->
+                    val isDashboardItem = item is Screen.Dashboard
+
+                    val isSelected = if (isDashboardItem && userIsAdmin == true) {
+                        currentRoute == "admin_dashboard"
+                    } else {
+                        currentRoute == item.route
+                    }
                     NavigationBarItem(
-                        selected = currentRoute == item.route,
+                        selected = isSelected,
                         onClick = {
-                            bottomNavController.navigate(item.route) {
+                            val targetRoute = if (item == Screen.Dashboard && userIsAdmin == true) {
+                                "admin_dashboard"
+                            } else {
+                                item.route
+                            }
+                            bottomNavController.navigate(targetRoute) {
                                 popUpTo(bottomNavController.graph.startDestinationId) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
@@ -129,7 +162,7 @@ fun HomePage(mainNavController: NavController) {
     ) { innerPadding ->
         NavHost(
             navController = bottomNavController,
-            startDestination = Screen.Dashboard.route,
+            startDestination = startRoute,
             modifier = Modifier.padding(
                 top = innerPadding.calculateTopPadding(),
                 bottom = 20.dp
@@ -238,15 +271,13 @@ fun HomePage(mainNavController: NavController) {
                     onBack = { bottomNavController.popBackStack() }
                 )
             }
+            composable("admin_dashboard") {
+                AdminDashboardPage(
+                    navController = bottomNavController,
+                    viewModel = viewModel
+                )
+            }
         }
     }
 }
-
-@Preview
-@Composable
-fun HomePreview() {
-    SafeMealTheme {
-        val navController = rememberNavController()
-        HomePage(mainNavController = navController)
-    }
 }

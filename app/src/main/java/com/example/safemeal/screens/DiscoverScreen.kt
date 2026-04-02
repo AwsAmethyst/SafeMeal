@@ -74,6 +74,7 @@ fun DiscoverPage(navController: NavController, // 1. Added this parameter
     var showSheet by remember { mutableStateOf(false) }
     // Use the full path or ensure the correct import is at the top
     var selectedRestaurant by remember { mutableStateOf<Restaurant?>(null) }
+    var mapstyle = "mapbox://styles/yokai-aws/cmlm3glvm001t01r339siet1d"
 
     val mapViewportState = rememberMapViewportState {
         setCameraOptions {
@@ -87,7 +88,7 @@ fun DiscoverPage(navController: NavController, // 1. Added this parameter
     }
     Box {
         MapboxMap(
-            style = { MapStyle(style = "mapbox://styles/yokai-aws/cmlm3glvm001t01r339siet1d") },
+            style = { MapStyle(style = mapstyle) },
             modifier = Modifier.fillMaxSize(),
             mapViewportState = mapViewportState,
             mapState = rememberMapState {

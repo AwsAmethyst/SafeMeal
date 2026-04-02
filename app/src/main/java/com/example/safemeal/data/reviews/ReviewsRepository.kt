@@ -23,12 +23,10 @@ object ReviewRepository {
                     Query.equal("restaurant_id", restaurantId)
                 )
             )
-
             // 2. If the list is not empty, block the new review
             if (existingReviews.total > 0) {
                 return "ALREADY_REVIEWED"
             }
-
             // 3. If no review exists, proceed to create
             AppwriteManger.AppwriteManager.databases.createDocument(
                 databaseId = DATABASE_ID,
@@ -166,9 +164,7 @@ object ReviewRepository {
         }
     }
 
-    /**
-     * Updates an existing review (Edit Functionality)
-     */
+
     suspend fun updateReview(reviewId: String, newRating: Int, newComment: String): String {
         return try {
             AppwriteManger.AppwriteManager.databases.updateDocument(
@@ -187,9 +183,6 @@ object ReviewRepository {
         }
     }
 
-    /**
-     * Deletes a review (Delete Functionality)
-     */
     suspend fun deleteReview(reviewId: String): String {
         return try {
             AppwriteManger.AppwriteManager.databases.deleteDocument(
@@ -201,6 +194,45 @@ object ReviewRepository {
         } catch (e: Exception) {
             Log.e("ReviewRepo", "Delete failed: ${e.message}")
             "ERROR"
+        }
+    }
+    suspend fun getMonthlyReviewStats(): List<Pair<String, Int>> {
+        return try {
+            val user = AppwriteManger.AppwriteManager.account.get()
+            val response = AppwriteManger.AppwriteManager.databases.listDocuments(
+                databaseId = DATABASE_ID,
+                collectionId = "reviews",
+                queries = listOf(io.appwrite.Query.equal("user_id", user.id))
+            )
+
+            val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+            val calendar = java.util.Calendar.getInstance()
+            val currentMonthIdx = calendar.get(java.util.Calendar.MONTH)
+
+            // Generate the 3-month window (e.g., if current is Mar, window is [Jan, Feb, Mar])
+            val lastThreeMonths = mutableListOf<String>()
+            for (i in 2 downTo 0) {
+                val idx = (currentMonthIdx - i + 12) % 12
+                lastThreeMonths.add(months[idx])
+            }
+
+            // Initialize counts to zero for these specific months
+            val statsMap = lastThreeMonths.associateWith { 0 }.toMutableMap()
+
+            response.documents.forEach { doc ->
+                val dateStr = doc.createdAt // "2026-03-24..."
+                val monthIndex = dateStr.substring(5, 7).toInt() - 1
+                val monthName = months[monthIndex]
+
+                if (statsMap.containsKey(monthName)) {
+                    statsMap[monthName] = statsMap[monthName]!! + 1
+                }
+            }
+
+            // Return the list in the correct chronological order
+            lastThreeMonths.map { it to (statsMap[it] ?: 0) }
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 }

@@ -54,14 +54,7 @@ class RestaurantViewModel : ViewModel() {
         }
     }
 
-    // Keep your standard fetch for manual searches/overrides
-    /*fun fetchRestaurants(tag: String? = null) {
-        viewModelScope.launch {
-            isLoading = true
-            restaurants = RestaurantRepository.getRestaurantsByTag(tag)
-            isLoading = false
-        }
-    }*/
+
     suspend fun fetchRestaurants(tag: String? = null): List<Restaurant> {
         isLoading = true
         val result = RestaurantRepository.getRestaurantsByTag(tag)
@@ -69,13 +62,7 @@ class RestaurantViewModel : ViewModel() {
         isLoading = false
         return result // Return the list so we can use it immediately
     }
-/*
-    fun seedData() {
-        viewModelScope.launch {
-            RestaurantRepository.seedDatabase()
-        }
-    }
-*/
+
     var selectedRestaurantForDetails by mutableStateOf<Restaurant?>(null)
 
     // Optional: A helper function to set it
@@ -83,51 +70,11 @@ class RestaurantViewModel : ViewModel() {
         selectedRestaurantForDetails = restaurant
     }
     // Inside RestaurantViewModel.kt
-
     // 1. Create the state that the Dashboard will observe
     var hotRestaurants by mutableStateOf<List<Restaurant>>(emptyList())
         private set // Only the ViewModel can change this list
 
-    /*fun fetchHotRestaurants(userChoice: String) {
-        viewModelScope.launch {
-            if (restaurants.isEmpty()) {
-                fetchRestaurants()
-            }
-            val currentRestaurants = restaurants
-            try {
-                // Step 1: Get the current list of restaurants (already fetched by fetchRestaurants())
-                val baseList = restaurants
 
-                // Step 2: Enrich the list with ratings from the ReviewRepository
-                // We use .map to go through every restaurant and "attach" its average rating
-                val enrichedList = baseList.map { restaurant ->
-                    val summary = com.example.safemeal.data.reviews.ReviewRepository.getRatingSummary(restaurant.id)
-
-                    // Use .copy() to fill the 'rating' slot you just added to the data class
-                    restaurant.copy(rating = summary.average)
-                }
-
-                // Step 3: Apply your 3 Sorting Layers
-                hotRestaurants = enrichedList
-                    .filter { restaurant ->
-                        // LAYER 1: Filter by user preference (Sattvic, Vegan, etc.)
-                        if (userChoice.isNotEmpty()) {
-                            restaurant.tags?.contains(userChoice, ignoreCase = true) == true
-                        } else true
-                    }
-                    .sortedWith(
-                        // LAYER 2: Highest Average Rating first
-                        compareByDescending<Restaurant> { it.rating }
-                            // LAYER 3: Tie-breaker (Recency using ID)
-                            .thenByDescending { it.id }
-                    )
-                    .take(5) // Only show the top 5 "Hot" spots
-
-            } catch (e: Exception) {
-                Log.e("RestaurantVM", "Failed to sort hot restaurants: ${e.message}")
-            }
-        }
-    }*/
     fun fetchHotRestaurants(userChoice: String) {
         viewModelScope.launch {
             try {

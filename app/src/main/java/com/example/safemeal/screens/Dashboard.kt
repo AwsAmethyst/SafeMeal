@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -31,8 +32,22 @@ import com.example.safemeal.data.restaurant.RestaurantViewModel
 import com.example.safemeal.data.reviews.ReviewRepository
 import com.example.safemeal.ui.theme.GreenMain
 import com.example.safemeal.ui.theme.GreyMain
+import com.example.safemeal.ui.theme.Manrope
 import com.example.safemeal.ui.theme.WhiteMain
 import kotlinx.coroutines.launch
+// UI & Graphics Imports
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+
+// Compose UI Core
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 // Theme Colors
 val PrimaryGreen = Color(0xFF267359)
@@ -54,7 +69,7 @@ fun DashboardPage(
     var isAdmin by remember { mutableStateOf(false) }
     var profileImageUrl by remember { mutableStateOf<String?>(null) } // New
 
-
+    var monthlyData by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
     LaunchedEffect(Unit) {
         isLoading = true
         try {
@@ -86,6 +101,9 @@ fun DashboardPage(
 
             viewModel.fetchHotRestaurants(userChoice)
             reviewCount = ReviewRepository.getUserReviewCount(user.id)
+
+            val stats = ReviewRepository.getMonthlyReviewStats()
+            monthlyData = stats
 
         } catch (e: Exception) {
             Log.e("Dashboard", "Error: ${e.message}")
@@ -161,7 +179,10 @@ fun DashboardPage(
                         .verticalScroll(rememberScrollState())
                 ) {
                     HeaderSection(userName,profileImageUrl)
-                    SafetyImpactCard(reviewCount)
+                    //SafetyImpactCard(reviewCount)
+                    if (monthlyData.isNotEmpty()) {
+                        UserImpactLineGraph(reviewData = monthlyData)
+                    }
                     TopRatedSection(
                         restaurants = viewModel.hotRestaurants,
                         userTag = userChoice.ifEmpty { "PREF" }.uppercase(),
@@ -305,7 +326,8 @@ fun SafetyImpactCard(count: Int) {
 }
 
 @Composable
-fun TopRatedSection(restaurants: List<Restaurant>, userTag: String = "YOUR PREF.", onRestaurantClick: (Restaurant) -> Unit) {
+fun TopRatedSection(restaurants: List<Restaurant>, userTag: String = "YOUR PREF.",
+                    onRestaurantClick: (Restaurant) -> Unit) {
     Column(modifier = Modifier.padding(vertical = 16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
@@ -436,5 +458,161 @@ fun RecentItem(title: String, subtitle: String, onClick: () -> Unit) {
             Text(subtitle, fontSize = 12.sp, color = Color.Gray)
         }
         Icon(painterResource(R.drawable.arrow_back), contentDescription = null, tint = PrimaryGreen, modifier = Modifier.size(16.dp))
+    }
+}
+@Composable
+fun UserImpactLineGraph(reviewData: List<Pair<String, Int>>) {
+    // 1. Calculate Max and create 'Headroom' (30% space above the peak)
+    val maxCount = reviewData.maxOfOrNull { it.second }?.coerceAtLeast(1) ?: 1
+    val graphMax = maxCount * 1.3f
+
+    // Theme Colors
+    val darkOrange = Color(0xFFBF4F00)
+    val gridColor = Color.LightGray.copy(alpha = 0.2f)
+    val gradientStart = darkOrange.copy(alpha = 0.25f)
+    val gradientEnd = darkOrange.copy(alpha = 0.0f)
+    val axisColor = Color.LightGray
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = "COMMUNITY CONTRIBUTION TREND",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = GreyMain,
+                fontFamily = Manrope
+            )
+
+            Spacer(modifier = Modifier.height(30.dp))
+
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .padding(start = 45.dp, bottom = 25.dp, end = 25.dp)
+            ) {
+                val width = size.width
+                val height = size.height
+
+                // --- 1. CALCULATE DATA POINTS (With Headroom Scaling) ---
+                val xSpacing = if (reviewData.size > 1) width / (reviewData.size - 1) else width
+                val dataPoints = reviewData.mapIndexed { index, pair ->
+                    val x = index * xSpacing
+                    // Scale relative to graphMax instead of maxCount for space at the top
+                    val yScaled = (pair.second.toFloat() / graphMax) * height
+                    val y = height - yScaled
+                    Offset(x, y)
+                }
+
+                // --- 2. DRAW Y-AXIS LABELS ---
+                // Draw Max Label at the actual peak's height
+                val peakY = dataPoints.minOf { it.y }
+                drawContext.canvas.nativeCanvas.drawText(
+                    maxCount.toString(),
+                    -25f,
+                    peakY + 10f, // Aligned with the peak dot
+                    android.graphics.Paint().apply {
+                        color = darkOrange.toArgb()
+                        textSize = 12.sp.toPx()
+                        textAlign = android.graphics.Paint.Align.RIGHT
+                        typeface = android.graphics.Typeface.DEFAULT_BOLD
+                    }
+                )
+
+                drawContext.canvas.nativeCanvas.drawText(
+                    "0",
+                    -25f,
+                    height,
+                    android.graphics.Paint().apply {
+                        color = axisColor.toArgb()
+                        textSize = 10.sp.toPx()
+                        textAlign = android.graphics.Paint.Align.RIGHT
+                    }
+                )
+
+                // --- 3. DRAW GRID PATTERN ---
+                val gridStepPx = 35.dp.toPx()
+                for (x in 0 until (width / gridStepPx).toInt() + 1) {
+                    val lineX = x * gridStepPx
+                    if (lineX <= width) {
+                        drawLine(color = gridColor, start = Offset(lineX, 0f), end = Offset(lineX, height), strokeWidth = 1.dp.toPx())
+                    }
+                }
+                for (y in 0 until (height / gridStepPx).toInt() + 1) {
+                    val lineY = y * gridStepPx
+                    if (lineY <= height) {
+                        drawLine(color = gridColor, start = Offset(0f, lineY), end = Offset(width, lineY), strokeWidth = 1.dp.toPx())
+                    }
+                }
+
+                // --- 4. DRAW AREA SHADING (GRADIENT) ---
+                if (dataPoints.size > 1) {
+                    val fillPath = Path().apply {
+                        moveTo(0f, height)
+                        dataPoints.forEach { lineTo(it.x, it.y) }
+                        lineTo(width, height)
+                        close()
+                    }
+                    drawPath(
+                        path = fillPath,
+                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(gradientStart, gradientEnd),
+                            startY = dataPoints.minOf { it.y },
+                            endY = height
+                        )
+                    )
+                }
+
+                // --- 5. DRAW THE TREND LINE ---
+                if (dataPoints.size > 1) {
+                    val linePath = Path().apply {
+                        moveTo(dataPoints[0].x, dataPoints[0].y)
+                        for (i in 1 until dataPoints.size) { lineTo(dataPoints[i].x, dataPoints[i].y) }
+                    }
+                    drawPath(
+                        path = linePath,
+                        color = darkOrange,
+                        style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+
+                    dataPoints.forEach {
+                        drawCircle(color = darkOrange, radius = 5.dp.toPx(), center = it)
+                        drawCircle(color = Color.White, radius = 2.5.dp.toPx(), center = it)
+                    }
+                }
+
+                // --- 6. DRAW AXES WITH ARROWS ---
+                drawLine(color = axisColor, start = Offset(0f, height), end = Offset(width, height), strokeWidth = 1.5.dp.toPx())
+                drawLine(color = axisColor, start = Offset(width, height), end = Offset(width - 15f, height - 12f), strokeWidth = 1.5.dp.toPx())
+                drawLine(color = axisColor, start = Offset(width, height), end = Offset(width - 15f, height + 12f), strokeWidth = 1.5.dp.toPx())
+
+                drawLine(color = axisColor, start = Offset(0f, 0f), end = Offset(0f, height), strokeWidth = 1.5.dp.toPx())
+                drawLine(color = axisColor, start = Offset(0f, 0f), end = Offset(-12f, 15f), strokeWidth = 1.5.dp.toPx())
+                drawLine(color = axisColor, start = Offset(0f, 0f), end = Offset(12f, 15f), strokeWidth = 1.5.dp.toPx())
+
+                // --- 7. DRAW MONTH LABELS ---
+                reviewData.forEachIndexed { index, pair ->
+                    val x = index * xSpacing
+                    drawContext.canvas.nativeCanvas.drawText(
+                        pair.first.uppercase(),
+                        x,
+                        height + 45f,
+                        android.graphics.Paint().apply {
+                            color = GreyMain.toArgb()
+                            textSize = 11.sp.toPx()
+                            textAlign = android.graphics.Paint.Align.CENTER
+                            typeface = android.graphics.Typeface.DEFAULT_BOLD
+                        }
+                    )
+                }
+            }
+        }
     }
 }

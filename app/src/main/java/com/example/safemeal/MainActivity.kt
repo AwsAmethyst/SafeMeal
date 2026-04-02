@@ -14,8 +14,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,14 +26,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.safemeal.ui.theme.SafeMealTheme
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.safemeal.screens.AdminDashboardPage
 import com.example.safemeal.screens.HomePage
 import com.example.safemeal.screens.LoginPage
 import com.example.safemeal.screens.SignUpPage
+import com.example.safemeal.ui.theme.GreenMain
 import com.mapbox.common.MapboxOptions
 import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
 import com.mapbox.navigation.base.options.NavigationOptions
@@ -99,7 +104,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SafeMealApp(){
     val navController = rememberNavController()
-    var startDestination by remember { mutableStateOf("loading") }
+    var startDestination by remember { mutableStateOf("checking_session") }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -112,7 +117,11 @@ fun SafeMealApp(){
             startDestination = "login"
         }
     }
-
+    if(startDestination == "checking_session") {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = GreenMain)
+        }
+    } else {
     Scaffold(modifier = Modifier.fillMaxSize()) { innerpadding ->
         if(startDestination != "loading") {
             NavHost(
@@ -190,9 +199,12 @@ fun SafeMealApp(){
                 composable(route = "loading") {
 
                 }
+
+
             }
         }
     }
+}
 }
 
 

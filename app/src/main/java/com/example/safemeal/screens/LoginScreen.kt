@@ -215,29 +215,22 @@ fun LoginPage(onNavigateToSignUp: () -> Unit, onLoginSuccess: () -> Unit) {
                 onClick = {
                     val sanitizedEmail = text.trim().lowercase()
                     val password = passState.text.toString() // Convert TextFieldState to String
-
                     if (sanitizedEmail.isEmpty() || password.isEmpty()) {
                         errorMessage = "Please fill in all fields"
                         return@Button
                     }
-
                     scope.launch {
                         isLoading = true
                         errorMessage = null
-                        try {
-                            // 1. Try to delete any "Ghost" sessions first to clear the 'Guest' role
+                        try { // 1. Try to delete any "Ghost" sessions first to clear the 'Guest' role
                             try {
                                 AppwriteManger.AppwriteManager.account.deleteSession("current")
-                            } catch (e: Exception) {
-                                // Ignore if no session exists
-                            }
-
-                            // 2. Perform the actual Login
+                            } catch (e: Exception) { // Ignore if no session exists
+                            }// 2. Perform the actual Login
                             AppwriteManger.AppwriteManager.account.createEmailPasswordSession(
                                 email = sanitizedEmail,
                                 password = password
                             )
-
                             isLoading = false
                             onLoginSuccess()
                         } catch (e: Exception) {
