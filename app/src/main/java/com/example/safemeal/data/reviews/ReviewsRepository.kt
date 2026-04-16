@@ -13,7 +13,6 @@ object ReviewRepository {
     suspend fun addReview(restaurantId: String, rating: Int, comment: String,restaurantName: String): String {
         return try {
             val user = AppwriteManger.AppwriteManager.account.get()
-
             // 1. Check if the user has already reviewed THIS restaurant
             val existingReviews = AppwriteManger.AppwriteManager.databases.listDocuments(
                 databaseId = DATABASE_ID,

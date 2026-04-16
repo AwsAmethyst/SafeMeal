@@ -36,11 +36,13 @@ import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
 import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineApiOptions
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineViewOptions
-// FIX: Import ONLY com.mapbox.common.location.Location — do NOT import android.location.Location.
-// The LocationObserver interface in Navigation SDK v3 uses com.mapbox.common.location.Location
-// for onNewRawLocation. Importing android.location.Location causes the "not abstract" error
-// because the compiler sees them as two different types and thinks the method is unimplemented.
 import com.mapbox.common.location.Location
+import com.mapbox.navigation.core.directions.session.RoutesObserver
+import com.mapbox.navigation.base.formatter.DistanceFormatterOptions
+import com.mapbox.navigation.core.formatter.MapboxDistanceFormatter
+import com.mapbox.navigation.tripdata.maneuver.api.MapboxManeuverApi
+import com.mapbox.navigation.ui.components.maneuver.view.MapboxManeuverView
+
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -54,31 +56,53 @@ fun NavigationScreen(
     val context = LocalContext.current
     val mapboxNavigation = MapboxNavigationApp.current()
     val mapView = remember { MapView(context) }
-
+// Tracks if the user has reached the restaurant
+    var hasArrived by remember { mutableStateOf(false) }
     // NavigationLocationProvider drives the blue puck on the map.
-    // It must be fed location updates from onNewLocationMatcherResult.
     val navigationLocationProvider = remember { NavigationLocationProvider() }
 
-    // Route line — created once, not on every recomposition
+// 1. Initialize the API and explicitly turn ON the vanishing feature
     val routeLineApi = remember {
-        MapboxRouteLineApi(MapboxRouteLineApiOptions.Builder().build())
-    }
-    val routeLineView = remember {
-        MapboxRouteLineView(MapboxRouteLineViewOptions.Builder(context).build())
+        MapboxRouteLineApi(
+            MapboxRouteLineApiOptions.Builder()
+                .vanishingRouteLineEnabled(true) // <--- THIS MAKES IT TRIM BEHIND THE PUCK
+                .build()
+        )
     }
 
-    // Holds the loaded map style so the RouteProgressObserver can render updates
+    // 2. Initialize the View and keep the line under the street names and puck
+    val routeLineView = remember {
+        MapboxRouteLineView(
+            MapboxRouteLineViewOptions.Builder(context)
+                .routeLineBelowLayerId("road-label")
+                .build()
+        )
+    }
+// --- Direction Banner Setup ---
+    val distanceFormatterOptions = remember {
+        DistanceFormatterOptions.Builder(context).build()
+    }
+    val maneuverApi = remember {
+        MapboxManeuverApi(MapboxDistanceFormatter(distanceFormatterOptions))
+    }
+    val maneuverView = remember {
+        MapboxManeuverView(context).apply {
+            // Optional: Hide the banner initially until the first GPS update arrives
+            visibility = android.view.View.INVISIBLE
+        }
+    }
+    // Holds the loaded map style
     var mapStyle by remember { mutableStateOf<com.mapbox.maps.Style?>(null) }
 
     // Link the location puck to NavigationLocationProvider
-    LaunchedEffect(mapView) {
+    /*LaunchedEffect(mapView) {
         mapView.location.updateSettings {
             enabled = true
             pulsingEnabled = true
         }
         mapView.location.setLocationProvider(navigationLocationProvider)
     }
-
+*/
     Box(modifier = Modifier.fillMaxSize()) {
 
         // ── Map ──────────────────────────────────────────────────────────────
@@ -86,11 +110,19 @@ fun NavigationScreen(
             factory = { mapView },
             modifier = Modifier.fillMaxSize()
         )
+        AndroidView(
+            factory = { maneuverView },
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(top = 76.dp, start = 16.dp, end = 16.dp)
+                .align(Alignment.TopCenter)
+        )
+
 
         // ── Back button ──────────────────────────────────────────────────────
         IconButton(
             onClick = {
-                // Clear the active route and stop the trip session before leaving
                 mapboxNavigation?.setNavigationRoutes(emptyList())
                 mapboxNavigation?.stopTripSession()
                 onBack()
@@ -137,24 +169,16 @@ fun NavigationScreen(
     // ── Location observer ────────────────────────────────────────────────────
     DisposableEffect(mapboxNavigation) {
         val locationObserver = object : LocationObserver {
-            // FIX: Parameter type is com.mapbox.common.location.Location (imported above).
-            // Do NOT qualify it as android.location.Location — that's a different class
-            // and causes the "does not implement abstract member" compile error.
-            override fun onNewRawLocation(rawLocation: Location) {
-                // Raw GPS — intentionally empty; use onNewLocationMatcherResult instead
-            }
+            override fun onNewRawLocation(rawLocation: Location) {}
 
             override fun onNewLocationMatcherResult(locationMatcherResult: LocationMatcherResult) {
                 val enhancedLocation = locationMatcherResult.enhancedLocation
 
-                // FIX: Feed location into NavigationLocationProvider so the puck actually moves.
-                // Previously we only moved the camera but never updated the puck position.
                 navigationLocationProvider.changePosition(
                     location = enhancedLocation,
                     keyPoints = locationMatcherResult.keyPoints
                 )
 
-                // Move camera to follow user with nav-style bearing + pitch
                 mapView.mapboxMap.setCamera(
                     CameraOptions.Builder()
                         .center(Point.fromLngLat(enhancedLocation.longitude, enhancedLocation.latitude))
@@ -175,14 +199,37 @@ fun NavigationScreen(
         }
     }
 
-    // ── Route progress observer — trims the travelled part of the blue line ──
+    // ── FIX 2: Restored Route progress observer to trim the travelled line ──
+// ── Route progress observer ──
     DisposableEffect(mapboxNavigation) {
         val routeProgressObserver = RouteProgressObserver { routeProgress ->
-            // updateWithRouteProgress tells the API how far along the route we are.
-            // The resulting value, when rendered, hides the already-travelled portion.
-            val style = mapStyle ?: return@RouteProgressObserver
-            routeLineApi.updateWithRouteProgress(routeProgress) { value ->
-                routeLineView.renderRouteLineUpdate(style, value)
+
+            // 1. Trim the traveled line
+            mapView.mapboxMap.getStyle()?.let { style ->
+                if (style.isValid()) {
+                    routeLineApi.updateWithRouteProgress(routeProgress) { value ->
+                        routeLineView.renderRouteLineUpdate(style, value)
+                    }
+                }
+            }
+
+            // 2. Feed progress directly to the Direction Banner
+            val maneuvers = maneuverApi.getManeuvers(routeProgress)
+            maneuverView.renderManeuvers(maneuvers)
+            if (maneuvers.isValue) {
+                maneuverView.visibility = android.view.View.VISIBLE
+            }
+
+            // 3. FIX: Check for Arrival (If less than 20 meters away)
+            val distanceRemaining = routeProgress.distanceRemaining
+            if (distanceRemaining < 100.0 && !hasArrived) {
+                hasArrived = true
+                // Optional: Clear the route line off the map
+                routeLineApi.clearRouteLine { value ->
+                    mapView.mapboxMap.getStyle()?.let { style ->
+                        routeLineView.renderClearRouteLineValue(style, value)
+                    }
+                }
             }
         }
 
@@ -190,16 +237,52 @@ fun NavigationScreen(
 
         onDispose {
             mapboxNavigation?.unregisterRouteProgressObserver(routeProgressObserver)
+            maneuverApi.cancel()
         }
     }
 
-    // ── Load style → then fetch + draw route ─────────────────────────────────
+    // ── Routes observer — redraws the blue line on Rerouting ──
+    DisposableEffect(mapboxNavigation) {
+        val routesObserver = RoutesObserver { routeUpdateResult ->
+            val newRoutes = routeUpdateResult.navigationRoutes
+
+            mapView.mapboxMap.getStyle()?.let { style ->
+                if (style.isValid()) {
+                    if (newRoutes.isNotEmpty()) {
+                        routeLineApi.setNavigationRoutes(newRoutes) { value ->
+                            routeLineView.renderRouteDrawData(style, value)
+                        }
+                    } else {
+                        routeLineApi.clearRouteLine { value ->
+                            routeLineView.renderClearRouteLineValue(style, value)
+                        }
+                    }
+                }
+            }
+        }
+
+        mapboxNavigation?.registerRoutesObserver(routesObserver)
+
+        onDispose {
+            mapboxNavigation?.unregisterRoutesObserver(routesObserver)
+        }
+    }
+
+// ── Load style → then fetch + draw route ─────────────────────────────────
     LaunchedEffect(Unit) {
         val origin = Point.fromLngLat(userLng, userLat)
         val destination = Point.fromLngLat(destLng, destLat)
 
         mapView.mapboxMap.loadStyle(Style.MAPBOX_STREETS) { style ->
-            mapStyle = style  // save for RouteProgressObserver
+            mapStyle = style
+
+            // FIX: Initialize the Location Puck HERE, strictly after the style has loaded!
+            // This guarantees the "location-indicator-layer" exists before the route is drawn.
+            mapView.location.updateSettings {
+                enabled = true
+                pulsingEnabled = true
+            }
+            mapView.location.setLocationProvider(navigationLocationProvider)
 
             mapView.mapboxMap.setCamera(
                 CameraOptions.Builder()
@@ -217,17 +300,20 @@ fun NavigationScreen(
                 object : NavigationRouterCallback {
                     override fun onRoutesReady(
                         routes: List<NavigationRoute>,
-                        routerOrigin: String         // v3 uses @RouterOrigin String, not RouterOrigin object
+                        routerOrigin: String
                     ) {
                         mapboxNavigation.setNavigationRoutes(routes)
 
-                        // Draw the route line — previously commented out
+                        // Because the puck is now fully loaded above, this line will
+                        // successfully render underneath it and trim as you move.
                         routeLineApi.setNavigationRoutes(routes) { value ->
                             routeLineView.renderRouteDrawData(style, value)
                         }
 
                         Log.d("Nav", "Route ready: ${routes.size} route(s)")
                     }
+
+                    // ... (Keep onFailure and onCanceled as they are)
 
                     override fun onFailure(
                         reasons: List<RouterFailure>,
@@ -238,7 +324,7 @@ fun NavigationScreen(
 
                     override fun onCanceled(
                         routeOptions: RouteOptions,
-                        routerOrigin: String         // same here — String not RouterOrigin
+                        routerOrigin: String
                     ) {
                         Log.d("Nav", "Route cancelled")
                     }
@@ -253,5 +339,34 @@ fun NavigationScreen(
             routeLineApi.cancel()
             routeLineView.cancel()
         }
+    }
+
+    // ── Arrival Dialog ────────────────────────────────────────────────────────
+    if (hasArrived) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { /* Force user to click the button */ },
+            title = {
+                androidx.compose.material3.Text("You've Arrived! 🍽️")
+            },
+            text = {
+                androidx.compose.material3.Text("You have reached your destination. Enjoy your dietary-safe meal!")
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = {
+                        // Clean up and navigate back to the previous screen
+                        hasArrived = false
+                        mapboxNavigation?.setNavigationRoutes(emptyList())
+                        mapboxNavigation?.stopTripSession()
+                        onBack()
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = Color.Black // Matches your Back Button theme
+                    )
+                ) {
+                    androidx.compose.material3.Text("Finish Navigation", color = Color.White)
+                }
+            }
+        )
     }
 }

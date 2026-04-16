@@ -26,8 +26,8 @@ object AdminRepository {
 
 
             // 1. Fetch all restaurant documents
-            val restaurantRes = db.listDocuments(DATABASE_ID, RESTAURANTS_COL)
-            val reviewRes = db.listDocuments(DATABASE_ID, REVIEWS_COL)
+            val restaurantRes = db.listDocuments(DATABASE_ID, RESTAURANTS_COL, queries = listOf(Query.limit(5000)))
+            val reviewRes = db.listDocuments(DATABASE_ID, REVIEWS_COL, queries = listOf(Query.limit(5000)))
             val reviews = reviewRes.documents
             // 2. Calculate Growth Trend (Last 3 Months)
             val months = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -52,14 +52,20 @@ object AdminRepository {
 // 2. Map every unique user to their first contribution month
             val userFirstSeen = mutableMapOf<String, Int>() // userId -> monthIndex
             reviews.forEach { doc ->
-                val userId = doc.data["userId"]?.toString() ?: ""
-                val createdAt = doc.createdAt // "2026-03-24..."
-                val monthIndex = createdAt.substring(5, 7).toInt() - 1
+                // CHANGE: Use "user_id" to match your Appwrite console screenshot
+                val userId = doc.data["user_id"]?.toString() ?: ""
+                val createdAt = doc.createdAt // e.g., "2026-03-24..."
+
+                // Debug log to confirm we are catching the IDs
+                Log.d("AdminStats", "Found Review by User: $userId at $createdAt")
 
                 if (userId.isNotEmpty()) {
-                    val existing = userFirstSeen[userId]
-                    if (existing == null || monthIndex < existing) {
-                        userFirstSeen[userId] = monthIndex
+                    val monthIndex = createdAt.substring(5, 7).toIntOrNull()?.minus(1) ?: -1
+                    if (monthIndex != -1) {
+                        val existing = userFirstSeen[userId]
+                        if (existing == null || monthIndex < existing) {
+                            userFirstSeen[userId] = monthIndex
+                        }
                     }
                 }
             }
@@ -72,7 +78,9 @@ object AdminRepository {
                 runningTotal += newUsersInMonth
                 // Ensure we show at least 1 (the Admin) if the database is empty
                 monthName to runningTotal.coerceAtLeast(1)
+
             }
+            Log.e("User", "User:$runningTotal")
             // 3. Calculate Dietary Percentages
             val restaurants = restaurantRes.documents
             val total = restaurants.size.toFloat().coerceAtLeast(1f)
